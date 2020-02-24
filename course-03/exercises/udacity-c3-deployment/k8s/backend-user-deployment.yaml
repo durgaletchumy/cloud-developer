@@ -1,18 +1,22 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    service: backend-user
+    app: backend-user
   name: backend-user
 spec:
   replicas: 2
+  selector: 
+    matchLabels:
+      app: backend-user
   template:
     metadata:
       labels:
-        service: backend-user
+        app: backend-user
     spec:
       containers:
       - image: durgaletchumy/udacity-restapi-user
+        command: ['sh', '-c', 'echo Hello Kubernetes! && sleep 3600']
         name: backend-user 
         imagePullPolicy: Always  
         resources:

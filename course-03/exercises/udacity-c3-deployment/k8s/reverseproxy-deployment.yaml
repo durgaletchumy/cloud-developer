@@ -1,19 +1,25 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    service: reverseproxy
+    app: reverseproxy
+    version: v2
   name: reverseproxy
 spec:
   replicas: 2
+  selector:
+    matchLabels:
+      app: reverseproxy
   template:
     metadata:
       labels:
-        service: reverseproxy
+        app: reverseproxy
+        version: v2
     spec:
       containers:
       - image: durgaletchumy/reverseproxy
         name: reverseproxy
+        command: ['sh', '-c', 'echo Hello Kubernetes! && sleep 3600']
         imagePullPolicy: Always          
         resources:
           requests:
