@@ -14,8 +14,7 @@ provider:
 
   environment: 
     TODO_TABLE: ToDo-${self:provider.stage}
-    IMAGES_TABLE: todoImages-${self:provider.stage}
-    IMAGE_ID_INDEX: ImageIdIndex
+    TODO_ID_INDEX: TodoIdIndex
     TODO_IMAGES_BUCKET: todo-images-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
   
@@ -31,13 +30,8 @@ provider:
       Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}
     - Effect: Allow
       Action:
-        - dynamodb:PutItem
         - dynamodb:Query
-      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}
-    - Effect: Allow
-      Action:
-        - dynamodb:Query
-      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}/index/${self:provider.environment.IMAGE_ID_INDEX}
+      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}/index/${self:provider.environment.TODO_ID_INDEX}
     - Effect: Allow
       Action:
         - s3:PutObject
@@ -51,6 +45,21 @@ provider:
         - s3:ListBucket
       Resource: arn:aws:s3:::${self:provider.environment.TODO_IMAGES_BUCKET}/*
 
+custom:
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: Todo Items Application
+        description: Todo Items
+    models:
+      - name: CreateTodo
+        contentType: "application/json"
+        schema: ${file(models/create-todo-request.json)}
+      - name: UpdateTodo
+        contentType: "application/json"
+        schema: ${file(models/update-todo-request.json)}
+
 functions:
 
   Auth:
@@ -63,8 +72,18 @@ functions:
       - http:
           method: get
           path: todos
-          # authorizer: Auth
           cors: true
+          # authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:GetObject
+          - s3:ListBucket
+        Resource: arn:aws:s3:::${self:provider.environment.TODO_IMAGES_BUCKET}/*
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}/index/${self:provider.environment.TODO_ID_INDEX}
 
   # TODO: Configure this function
   CreateTodo:
@@ -73,8 +92,20 @@ functions:
       - http:
           method: post
           path: todos
-          # authorizer: Auth
           cors: true
+          # authorizer: Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Create Todo
+            description: Create Todo
+            requestModels:
+              'application/json': CreateTodo
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}
+      
 
   # TODO: Configure this function
   UpdateTodo:
@@ -83,8 +114,23 @@ functions:
       - http:
           method: patch
           path: todos/{todoId}
-          # authorizer: Auth
           cors: true
+          # authorizer: Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Update Todo
+            description: Update Todo
+            requestModels:
+              'application/json': UpdateTodo
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}/index/${self:provider.environment.TODO_ID_INDEX}
 
   # TODO: Configure this function
   DeleteTodo:
@@ -93,8 +139,17 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
-          # authorizer: Auth
           cors: true
+          # authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}/index/${self:provider.environment.TODO_ID_INDEX}
 
   # TODO: Configure this function
   GenerateUploadUrl:
@@ -103,61 +158,72 @@ functions:
       - http:
           method: post
           path: todos/{todoId}/attachment
-          # authorizer: Auth
           cors: true
+          # authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Scan
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODO_TABLE}/index/${self:provider.environment.TODO_ID_INDEX}
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+        Resource: arn:aws:s3:::${self:provider.environment.TODO_IMAGES_BUCKET}/*
 
 resources:
   Resources:
     # TODO: Add any necessary AWS resources
-    # GatewayResponseDefault4XX:
-    #   Type: AWS::ApiGateway::GatewayResponse
-    #   Properties:
-    #     ResponseParameters:
-    #       gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-    #       gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    #       gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
-    #     ResponseType: DEFAULT_4XX
-    #     RestApiId:
-    #       Ref: ApiGatewayRestApi
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+    RequestBodyValidator:
+      Type: "AWS::ApiGateway::RequestValidator"
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
 
     ToDoDynamoDBTable:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
           - AttributeName: todoId
+            AttributeType: S
+          - AttributeName: createdAt
             AttributeType: S
         KeySchema:
-          - AttributeName: todoId
+          - AttributeName: userId
             KeyType: HASH
-        BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.TODO_TABLE}
-    
-    ImagesDynamoDBTable:
-      Type: "AWS::DynamoDB::Table"
-      Properties:
-        AttributeDefinitions:
-          - AttributeName: todoId
-            AttributeType: S
-          - AttributeName: timestamp
-            AttributeType: S
-          - AttributeName: imageId
-            AttributeType: S
-        KeySchema:
-          - AttributeName: imageId
-            KeyType: HASH
-          - AttributeName: timestamp
+          - AttributeName: createdAt
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
-        StreamSpecification:
-          StreamViewType: NEW_IMAGE
-        TableName: ${self:provider.environment.IMAGES_TABLE}
-        GlobalSecondaryIndexes:
-          - IndexName: ${self:provider.environment.IMAGE_ID_INDEX}
+        LocalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.TODO_ID_INDEX}
             KeySchema:
-            - AttributeName: todoId
+            - AttributeName: userId
               KeyType: HASH
+            - AttributeName: todoId
+              KeyType: RANGE
             Projection:
               ProjectionType: ALL
+        TableName: ${self:provider.environment.TODO_TABLE}
 
     AttachmentsBucket:
       Type: AWS::S3::Bucket

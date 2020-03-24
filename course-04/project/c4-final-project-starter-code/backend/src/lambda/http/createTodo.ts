@@ -1,45 +1,26 @@
 import 'source-map-support/register'
-import * as AWS  from 'aws-sdk'
-import * as uuid from 'uuid'
-import { parseUserId } from '../../auth/utils'
 
 import { APIGatewayProxyEvent, APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda'
-
-// import { CreateTodoRequest } from '../../requests/CreateTodoRequest'
-
+import { CreateTodoRequest } from '../../requests/CreateTodoRequest'
+import { createTodo } from '../../businessLogic/todo'
 import { createLogger } from '../../utils/logger'
+import { getUserId } from '../utils'
 
-const logger = createLogger('createToDo')
-
-const docClient = new AWS.DynamoDB.DocumentClient()
-const todoTable = process.env.TODO_TABLE
+const createTodoLogger = createLogger('createTodoLogger')
 
 export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  logger.info('Processing create to do: ', event)
-  // const newTodo: CreateTodoRequest = JSON.parse(event.body)
-
+  createTodoLogger.info('Processing create to do: ', event)
+  
   // TODO: Implement creating a new TODO item
+  const newTodo: CreateTodoRequest = JSON.parse(event.body)
 
-  const parsedBody = JSON.parse(event.body)
-  const todoId = uuid.v4()
-  const authorization = event.headers.Authorization
-  const split = authorization.split(' ')
-  const jwtToken = split[1]
+  createTodoLogger.info('newToDo', newTodo)
 
-  const newToDo =  {
-    todoId: todoId,
-    userId: parseUserId(jwtToken),
-    createdAt: new Date().toISOString(),
-    done: false,
-    ...parsedBody
-  }
+  const userId = getUserId(event)
 
-  logger.info('newToDo', newToDo)
+  const newTodoItem = await createTodo(newTodo, userId)
 
-  await docClient.put({
-    TableName: todoTable,
-    Item: newToDo
-  }).promise()
+  createTodoLogger.info('newTodoItem', newTodoItem)
 
   return {
     statusCode: 201,
@@ -47,7 +28,7 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
       'Access-Control-Allow-Origin': '*'
     },
     body: JSON.stringify({
-      item: newToDo
+      item: newTodoItem
     })
   }
 }
