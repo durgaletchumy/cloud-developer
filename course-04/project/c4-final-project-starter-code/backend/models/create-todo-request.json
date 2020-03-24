@@ -3,7 +3,7 @@
     "title": "Create Todo",
     "type": "object",
     "properties": {
-      "todoName": {
+      "name": {
         "type": "string"
       },
       "dueDate": {
@@ -11,7 +11,7 @@
       }
     },
     "required": [
-      "todoName",
+      "name",
       "dueDate"
     ]
   }
