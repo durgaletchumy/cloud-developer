@@ -3,12 +3,16 @@ import { DocumentClient } from 'aws-sdk/clients/dynamodb'
 import { TodoItem } from '../models/TodoItem'
 import { TodoUpdate } from '../models/TodoUpdate'
 
+const AWSXRay = require('aws-xray-sdk')
+
+const XAWS = AWSXRay.captureAWS(AWS)
+
 export class TodoAccess {
   constructor(
-    private readonly docClient: DocumentClient = new AWS.DynamoDB.DocumentClient(),
+    private readonly docClient: DocumentClient = new XAWS.DynamoDB.DocumentClient(),
     private readonly todoTable = process.env.TODO_TABLE,
     private readonly todoIndex = process.env.TODO_ID_INDEX,
-    private readonly s3 = new AWS.S3({ signatureVersion: 'v4' }),
+    private readonly s3 = new XAWS.S3({ signatureVersion: 'v4' }),
     private readonly bucketName = process.env.TODO_IMAGES_BUCKET,
     private readonly urlExpiration = process.env.SIGNED_URL_EXPIRATION) {}
 
